@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flowith 风格可拖拽卡片</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reactflow@11.10.1/dist/umd/index.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reactflow@11.10.1/dist/style.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #root {
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* 自定义节点样式 - Flowith 风格 */
+        .custom-node {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            min-width: 200px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .custom-node:hover {
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .custom-node.selected {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+        }
+
+        .node-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .node-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .node-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a202c;
+            flex: 1;
+        }
+
+        .node-content {
+            color: #4a5568;
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .node-footer {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .node-tag {
+            padding: 4px 12px;
+            background: #f7fafc;
+            border-radius: 12px;
+            font-size: 12px;
+            color: #4a5568;
+        }
+
+        /* 控制面板 */
+        .controls-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+            min-width: 250px;
+        }
+
+        .controls-panel h3 {
+            margin-bottom: 16px;
+            color: #1a202c;
+            font-size: 18px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px 20px;
+            margin-bottom: 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f7fafc;
+            color: #4a5568;
+        }
+
+        .btn-secondary:hover {
+            background: #edf2f7;
+        }
+
+        /* React Flow 自定义边样式 */
+        .react-flow__edge-path {
+            stroke: #667eea;
+            stroke-width: 2;
+        }
+
+        .react-flow__edge.selected .react-flow__edge-path {
+            stroke: #764ba2;
+            stroke-width: 3;
+        }
+
+        /* 背景网格 */
+        .react-flow__background {
+            background-color: #fafafa;
+        }
+
+        /* 迷你地图 */
+        .react-flow__minimap {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useCallback, useRef } = React;
+        const {
+            ReactFlow,
+            Controls,
+            Background,
+            MiniMap,
+            addEdge,
+            applyNodeChanges,
+            applyEdgeChanges,
+            MarkerType
+        } = ReactFlowRenderer;
+
+        // 自定义节点组件
+        const CustomNode = ({ data, selected }) => {
+            return (
+                <div className={`custom-node ${selected ? 'selected' : ''}`}>
+                    <div className="node-header">
+                        <div
+                            className="node-icon"
+                            style={{ background: data.color || '#667eea20' }}
+                        >
+                            {data.icon || '📝'}
+                        </div>
+                        <div className="node-title">{data.label}</div>
+                    </div>
+                    {data.description && (
+                        <div className="node-content">{data.description}</div>
+                    )}
+                    {data.tags && (
+                        <div className="node-footer">
+                            {data.tags.map((tag, idx) => (
+                                <span key={idx} className="node-tag">{tag}</span>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // 节点类型
+        const nodeTypes = {
+            custom: CustomNode
+        };
+
+        // 初始节点数据
+        const initialNodes = [
+            {
+                id: '1',
+                type: 'custom',
+                position: { x: 250, y: 100 },
+                data: {
+                    label: '开始节点',
+                    icon: '🚀',
+                    color: '#e0e7ff',
+                    description: '这是一个示例卡片，你可以拖拽移动它',
+                    tags: ['开始', '重要']
+                }
+            },
+            {
+                id: '2',
+                type: 'custom',
+                position: { x: 550, y: 100 },
+                data: {
+                    label: '处理数据',
+                    icon: '⚙️',
+                    color: '#fef3c7',
+                    description: '在这里处理输入的数据',
+                    tags: ['处理', '核心']
+                }
+            },
+            {
+                id: '3',
+                type: 'custom',
+                position: { x: 400, y: 300 },
+                data: {
+                    label: '输出结果',
+                    icon: '✨',
+                    color: '#d1fae5',
+                    description: '显示处理后的结果',
+                    tags: ['输出']
+                }
+            }
+        ];
+
+        // 初始连接线
+        const initialEdges = [
+            {
+                id: 'e1-2',
+                source: '1',
+                target: '2',
+                type: 'smoothstep',
+                animated: true,
+                markerEnd: { type: MarkerType.ArrowClosed }
+            },
+            {
+                id: 'e2-3',
+                source: '2',
+                target: '3',
+                type: 'smoothstep',
+                animated: true,
+                markerEnd: { type: MarkerType.ArrowClosed }
+            }
+        ];
+
+        // 主应用组件
+        function FlowithApp() {
+            const [nodes, setNodes] = useState(initialNodes);
+            const [edges, setEdges] = useState(initialEdges);
+            const nodeIdCounter = useRef(4);
+
+            // 节点变化处理
+            const onNodesChange = useCallback(
+                (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
+                []
+            );
+
+            // 连接线变化处理
+            const onEdgesChange = useCallback(
+                (changes) => setEdges((eds) => applyEdgeChanges(changes, eds)),
+                []
+            );
+
+            // 连接节点
+            const onConnect = useCallback(
+                (params) => setEdges((eds) => addEdge({
+                    ...params,
+                    type: 'smoothstep',
+                    animated: true,
+                    markerEnd: { type: MarkerType.ArrowClosed }
+                }, eds)),
+                []
+            );
+
+            // 添加新节点
+            const addNode = () => {
+                const colors = ['#e0e7ff', '#fef3c7', '#d1fae5', '#fce7f3', '#ddd6fe'];
+                const icons = ['📝', '💡', '🎯', '⚡', '🔥', '💻', '🎨', '📊'];
+
+                const newNode = {
+                    id: `${nodeIdCounter.current}`,
+                    type: 'custom',
+                    position: {
+                        x: Math.random() * 400 + 200,
+                        y: Math.random() * 300 + 100
+                    },
+                    data: {
+                        label: `新卡片 ${nodeIdCounter.current}`,
+                        icon: icons[Math.floor(Math.random() * icons.length)],
+                        color: colors[Math.floor(Math.random() * colors.length)],
+                        description: '双击编辑内容',
+                        tags: ['新建']
+                    }
+                };
+
+                nodeIdCounter.current++;
+                setNodes((nds) => [...nds, newNode]);
+            };
+
+            // 清空画布
+            const clearCanvas = () => {
+                if (confirm('确定要清空所有卡片吗？')) {
+                    setNodes([]);
+                    setEdges([]);
+                    nodeIdCounter.current = 1;
+                }
+            };
+
+            // 重置示例
+            const resetExample = () => {
+                setNodes(initialNodes);
+                setEdges(initialEdges);
+                nodeIdCounter.current = 4;
+            };
+
+            return (
+                <>
+                    <div className="controls-panel">
+                        <h3>🎨 控制面板</h3>
+                        <button className="btn btn-primary" onClick={addNode}>
+                            ➕ 添加新卡片
+                        </button>
+                        <button className="btn btn-secondary" onClick={resetExample}>
+                            🔄 重置示例
+                        </button>
+                        <button className="btn btn-secondary" onClick={clearCanvas}>
+                            🗑️ 清空画布
+                        </button>
+                        <div style={{ marginTop: '20px', fontSize: '13px', color: '#718096' }}>
+                            <p>💡 使用说明：</p>
+                            <ul style={{ paddingLeft: '20px', marginTop: '8px', lineHeight: '1.8' }}>
+                                <li>拖拽卡片移动</li>
+                                <li>连接点可拖拽连线</li>
+                                <li>鼠标滚轮缩放</li>
+                                <li>Delete 删除选中</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <ReactFlow
+                        nodes={nodes}
+                        edges={edges}
+                        onNodesChange={onNodesChange}
+                        onEdgesChange={onEdgesChange}
+                        onConnect={onConnect}
+                        nodeTypes={nodeTypes}
+                        fitView
+                        attributionPosition="bottom-right"
+                    >
+                        <Background color="#aaa" gap={16} />
+                        <Controls />
+                        <MiniMap
+                            nodeColor={(node) => {
+                                return node.data.color || '#667eea';
+                            }}
+                            maskColor="rgba(0, 0, 0, 0.1)"
+                        />
+                    </ReactFlow>
+                </>
+            );
+        }
+
+        // 渲染应用
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<FlowithApp />);
+    </script>
+</body>
+</html>
