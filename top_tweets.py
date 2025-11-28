@@ -6,19 +6,21 @@
     python top_tweets.py
 
 依赖安装:
-    pip install snscrape
+    pip install snscrape deep-translator
 """
 
 import snscrape.modules.twitter as sntwitter
 from datetime import datetime
 from typing import List, Dict
 import json
+from deep_translator import GoogleTranslator
 
 
 class TwitterTopTweetsFetcher:
     """Twitter 高赞推文获取器"""
 
-    def __init__(self, usernames: List[str], start_date: str, end_date: str):
+    def __init__(self, usernames: List[str], start_date: str, end_date: str,
+                 translate: bool = True):
         """
         初始化
 
@@ -26,10 +28,13 @@ class TwitterTopTweetsFetcher:
             usernames: 要查询的用户名列表 (不带@)
             start_date: 开始日期 'YYYY-MM-DD'
             end_date: 结束日期 'YYYY-MM-DD'
+            translate: 是否翻译推文内容为中文
         """
         self.usernames = usernames
         self.start_date = start_date
         self.end_date = end_date
+        self.translate = translate
+        self.translator = GoogleTranslator(source='auto', target='zh-CN') if translate else None
 
     def fetch_tweets(self, username: str, max_tweets: int = 100) -> List[Dict]:
         """
@@ -67,6 +72,28 @@ class TwitterTopTweetsFetcher:
             print(f"获取 @{username} 推文时出错: {e}")
 
         return tweets
+
+    def translate_text(self, text: str) -> str:
+        """
+        翻译文本为中文
+
+        Args:
+            text: 要翻译的文本
+
+        Returns:
+            翻译后的文本
+        """
+        if not self.translate or not self.translator:
+            return text
+
+        try:
+            # 处理长文本（Google Translate 有字符限制）
+            if len(text) > 4500:
+                text = text[:4500] + '...'
+            return self.translator.translate(text)
+        except Exception as e:
+            print(f"   ⚠️  翻译失败: {e}")
+            return text
 
     def get_top_tweets(self, tweets: List[Dict], top_n: int = 5,
                        sort_by: str = 'likes') -> List[Dict]:
@@ -115,14 +142,29 @@ class TwitterTopTweetsFetcher:
         for username in self.usernames:
             tweets = self.fetch_tweets(username, max_tweets_per_user)
             top_tweets = self.get_top_tweets(tweets, top_n, sort_by)
+
+            # 翻译推文内容
+            if self.translate:
+                for tweet in top_tweets:
+                    tweet['content_zh'] = self.translate_text(tweet['content'])
+
             results[username] = top_tweets
 
-            print(f"\n@{username} 的 Top {top_n} 推文 (按 {sort_by} 排序):")
+            sort_by_zh = {'likes': '点赞数', 'retweets': '转发数', 'combined': '综合评分'}
+            print(f"\n@{username} 的 Top {top_n} 推文 (按 {sort_by_zh.get(sort_by, sort_by)} 排序):")
             print("-" * 80)
             for i, tweet in enumerate(top_tweets, 1):
                 print(f"\n{i}. [{tweet['date']}]")
                 print(f"   ❤️  {tweet['likes']} | 🔄 {tweet['retweets']} | 💬 {tweet['replies']}")
-                print(f"   {tweet['content'][:100]}{'...' if len(tweet['content']) > 100 else ''}")
+
+                # 显示翻译后的内容
+                display_content = tweet.get('content_zh', tweet['content'])
+                print(f"   {display_content[:200]}{'...' if len(display_content) > 200 else ''}")
+
+                # 如果翻译了，也显示原文（可选）
+                if self.translate and 'content_zh' in tweet and tweet['content_zh'] != tweet['content']:
+                    print(f"   [原文] {tweet['content'][:100]}{'...' if len(tweet['content']) > 100 else ''}")
+
                 print(f"   🔗 {tweet['url']}")
 
         return results
@@ -157,12 +199,16 @@ def main():
 
     # 排序方式: 'likes' (点赞数), 'retweets' (转发数), 'combined' (综合)
     SORT_BY = 'likes'
+
+    # 是否翻译为中文（推荐开启）
+    TRANSLATE_TO_CHINESE = True
     # ===================================
 
     fetcher = TwitterTopTweetsFetcher(
         usernames=USERNAMES,
         start_date=START_DATE,
-        end_date=END_DATE
+        end_date=END_DATE,
+        translate=TRANSLATE_TO_CHINESE
     )
 
     results = fetcher.run(

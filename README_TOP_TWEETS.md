@@ -9,11 +9,12 @@
 - ✅ 简单易用
 - ✅ 性能良好
 - ✅ 支持多账号批量查询
+- ✅ **自动翻译为中文**
 
 ## 安装依赖
 
 ```bash
-pip install snscrape
+pip install snscrape deep-translator
 ```
 
 或者使用 requirements 文件：
@@ -48,6 +49,9 @@ TOP_N = 5
 
 # 排序方式: 'likes' (点赞数), 'retweets' (转发数), 'combined' (综合)
 SORT_BY = 'likes'
+
+# 是否翻译为中文（推荐开启）
+TRANSLATE_TO_CHINESE = True
 ```
 
 ### 2. 运行脚本
@@ -65,13 +69,20 @@ python top_tweets.py
 ```
 正在获取 @elonmusk 的推文...
 
-@elonmusk 的 Top 5 推文 (按 likes 排序):
+@elonmusk 的 Top 5 推文 (按 点赞数 排序):
 --------------------------------------------------------------------------------
 
 1. [2024-03-15 10:30:00]
    ❤️  125000 | 🔄 45000 | 💬 8500
-   This is an example tweet content...
+   这是一个示例推文内容的中文翻译...
+   [原文] This is an example tweet content...
    🔗 https://twitter.com/elonmusk/status/123456789
+
+2. [2024-03-14 15:20:00]
+   ❤️  98000 | 🔄 32000 | 💬 6200
+   另一条推文的中文翻译...
+   [原文] Another example tweet...
+   🔗 https://twitter.com/elonmusk/status/123456788
 ```
 
 ## 参数说明
@@ -84,6 +95,7 @@ python top_tweets.py
 | `MAX_TWEETS_PER_USER` | 每账号最多获取推文数 | `100` |
 | `TOP_N` | 返回前 N 条 | `5` |
 | `SORT_BY` | 排序方式 | `'likes'` |
+| `TRANSLATE_TO_CHINESE` | 是否翻译为中文 | `True` |
 
 ### 排序方式说明
 
